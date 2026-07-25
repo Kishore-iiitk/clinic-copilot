@@ -7,6 +7,7 @@ import {
   useTranslateText,
   useAddVitals,
   useCreatePatientNote,
+  useDeletePatientNote,
   getGetPatientQueryKey,
   getGetPatientNotesQueryKey,
   getGetPatientVitalsQueryKey,
@@ -17,14 +18,104 @@ import { Button } from "@/components/ui/button";
 import { RiskBadge } from "@/components/patient/RiskBadge";
 import { VitalsChart } from "@/components/patient/VitalsChart";
 import {
-  ArrowLeft, Mic, Languages, FileText, BrainCircuit, Activity,
-  Clock, HeartPulse, Thermometer, Wind, Droplet, Save, Loader2,
-  Plus, CheckCircle, AlertTriangle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  ArrowLeft,
+  Mic,
+  Languages,
+  FileText,
+  BrainCircuit,
+  Activity,
+  Clock,
+  HeartPulse,
+  Thermometer,
+  Wind,
+  Droplet,
+  Save,
+  Loader2,
+  Plus,
+  CheckCircle,
+  AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/context/RoleContext";
 import { motion, AnimatePresence } from "framer-motion";
+
+// ─── Doctor: Delete SOAP note button (with confirm) ──────────────────────────
+function DeleteNoteButton({
+  patientId,
+  noteId,
+}: {
+  patientId: number;
+  noteId: number;
+}) {
+  const queryClient = useQueryClient();
+  const deleteNote = useDeletePatientNote();
+
+  const handleDelete = () => {
+    deleteNote.mutate(
+      { id: patientId, noteId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getGetPatientNotesQueryKey(patientId),
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          type="button"
+          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="Delete this note"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this SOAP note?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently remove the note for both doctors and nurses.
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={deleteNote.isPending}
+            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+          >
+            {deleteNote.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin inline" />{" "}
+                Deleting...
+              </>
+            ) : (
+              "Delete Note"
+            )}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 // ─── Nurse: Inline Vitals Entry ──────────────────────────────────────────────
 function NurseVitalsForm({ patientId }: { patientId: number }) {
@@ -56,23 +147,73 @@ function NurseVitalsForm({ patientId }: { patientId: number }) {
       { id: patientId, data },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPatientQueryKey(patientId) });
-          queryClient.invalidateQueries({ queryKey: getGetPatientVitalsQueryKey(patientId) });
+          queryClient.invalidateQueries({
+            queryKey: getGetPatientQueryKey(patientId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: getGetPatientVitalsQueryKey(patientId),
+          });
           setSaved(true);
-          setForm({ heartRate: "", spo2: "", bpSystolic: "", bpDiastolic: "", temperature: "", respiratoryRate: "" });
-          setTimeout(() => { setSaved(false); setOpen(false); }, 2000);
+          setForm({
+            heartRate: "",
+            spo2: "",
+            bpSystolic: "",
+            bpDiastolic: "",
+            temperature: "",
+            respiratoryRate: "",
+          });
+          setTimeout(() => {
+            setSaved(false);
+            setOpen(false);
+          }, 2000);
         },
-      }
+      },
     );
   };
 
   const fields = [
-    { key: "heartRate", label: "Heart Rate", unit: "bpm", icon: <HeartPulse className="w-4 h-4 text-rose-500" />, type: "integer" },
-    { key: "spo2", label: "SpO2", unit: "%", icon: <Wind className="w-4 h-4 text-blue-500" />, type: "integer" },
-    { key: "bpSystolic", label: "BP Systolic", unit: "mmHg", icon: <Droplet className="w-4 h-4 text-orange-500" />, type: "integer" },
-    { key: "bpDiastolic", label: "BP Diastolic", unit: "mmHg", icon: <Droplet className="w-4 h-4 text-orange-400" />, type: "integer" },
-    { key: "temperature", label: "Temperature", unit: "°C", icon: <Thermometer className="w-4 h-4 text-amber-500" />, type: "decimal" },
-    { key: "respiratoryRate", label: "Resp Rate", unit: "/min", icon: <Activity className="w-4 h-4 text-teal-500" />, type: "integer" },
+    {
+      key: "heartRate",
+      label: "Heart Rate",
+      unit: "bpm",
+      icon: <HeartPulse className="w-4 h-4 text-rose-500" />,
+      type: "integer",
+    },
+    {
+      key: "spo2",
+      label: "SpO2",
+      unit: "%",
+      icon: <Wind className="w-4 h-4 text-blue-500" />,
+      type: "integer",
+    },
+    {
+      key: "bpSystolic",
+      label: "BP Systolic",
+      unit: "mmHg",
+      icon: <Droplet className="w-4 h-4 text-orange-500" />,
+      type: "integer",
+    },
+    {
+      key: "bpDiastolic",
+      label: "BP Diastolic",
+      unit: "mmHg",
+      icon: <Droplet className="w-4 h-4 text-orange-400" />,
+      type: "integer",
+    },
+    {
+      key: "temperature",
+      label: "Temperature",
+      unit: "°C",
+      icon: <Thermometer className="w-4 h-4 text-amber-500" />,
+      type: "decimal",
+    },
+    {
+      key: "respiratoryRate",
+      label: "Resp Rate",
+      unit: "/min",
+      icon: <Activity className="w-4 h-4 text-teal-500" />,
+      type: "integer",
+    },
   ] as const;
 
   return (
@@ -99,7 +240,9 @@ function NurseVitalsForm({ patientId }: { patientId: number }) {
                     <HeartPulse className="w-5 h-5 text-teal-600" />
                     Log Vitals Reading
                   </h3>
-                  <span className="text-xs text-gray-400 font-medium">{format(new Date(), "h:mm a")}</span>
+                  <span className="text-xs text-gray-400 font-medium">
+                    {format(new Date(), "h:mm a")}
+                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -113,7 +256,9 @@ function NurseVitalsForm({ patientId }: { patientId: number }) {
                           type="number"
                           step={type === "decimal" ? "0.1" : "1"}
                           value={form[key]}
-                          onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, [key]: e.target.value }))
+                          }
                           placeholder="—"
                           className="w-full px-3 py-2.5 pr-12 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-900 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none transition-all"
                         />
@@ -132,14 +277,25 @@ function NurseVitalsForm({ patientId }: { patientId: number }) {
                     className="flex-1 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
                   >
                     {saved ? (
-                      <><CheckCircle className="w-4 h-4 mr-2" /> Saved</>
+                      <>
+                        <CheckCircle className="w-4 h-4 mr-2" /> Saved
+                      </>
                     ) : addVitals.isPending ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
+                        Saving...
+                      </>
                     ) : (
-                      <><Save className="w-4 h-4 mr-2" /> Save Reading</>
+                      <>
+                        <Save className="w-4 h-4 mr-2" /> Save Reading
+                      </>
                     )}
                   </Button>
-                  <Button variant="outline" onClick={() => setOpen(false)} className="border-gray-200">
+                  <Button
+                    variant="outline"
+                    onClick={() => setOpen(false)}
+                    className="border-gray-200"
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -168,12 +324,14 @@ function NurseObservationForm({ patientId }: { patientId: number }) {
       },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetPatientNotesQueryKey(patientId) });
+          queryClient.invalidateQueries({
+            queryKey: getGetPatientNotesQueryKey(patientId),
+          });
           setSaved(true);
           setText("");
           setTimeout(() => setSaved(false), 2000);
         },
-      }
+      },
     );
   };
 
@@ -197,11 +355,17 @@ function NurseObservationForm({ patientId }: { patientId: number }) {
           className="w-full bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
         >
           {saved ? (
-            <><CheckCircle className="w-4 h-4 mr-2" /> Note Saved</>
+            <>
+              <CheckCircle className="w-4 h-4 mr-2" /> Note Saved
+            </>
           ) : createNote.isPending ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...
+            </>
           ) : (
-            <><Save className="w-4 h-4 mr-2" /> Save Observation</>
+            <>
+              <Save className="w-4 h-4 mr-2" /> Save Observation
+            </>
           )}
         </Button>
       </CardContent>
@@ -248,7 +412,7 @@ export default function PatientDetail() {
             diagnosis: patient.diagnosis,
           },
         },
-        { onSuccess: (data) => setExplanation(data.explanation) }
+        { onSuccess: (data) => setExplanation(data.explanation) },
       );
     }
   }, [patient, isDoctor]);
@@ -259,7 +423,7 @@ export default function PatientDetail() {
       if (explanation && !tamilExp) {
         translateText.mutate(
           { data: { text: explanation } },
-          { onSuccess: (data) => setTamilExp(data.translated) }
+          { onSuccess: (data) => setTamilExp(data.translated) },
         );
       }
     } else {
@@ -268,7 +432,11 @@ export default function PatientDetail() {
   };
 
   if (isLoading || !patient) {
-    return <div className="p-8 text-center text-gray-500 animate-pulse">Loading patient...</div>;
+    return (
+      <div className="p-8 text-center text-gray-500 animate-pulse">
+        Loading patient...
+      </div>
+    );
   }
 
   const isFlagged = patient.risk === "amber" || patient.risk === "red";
@@ -283,14 +451,18 @@ export default function PatientDetail() {
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </Link>
-        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">Back to Ward</div>
+        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+          Back to Ward
+        </div>
       </div>
 
       {/* Patient header */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">{patient.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">
+              {patient.name}
+            </h1>
             <RiskBadge risk={patient.risk} />
           </div>
           <p className="text-sm text-gray-500">
@@ -365,47 +537,77 @@ export default function PatientDetail() {
                                   "font-bold text-xs uppercase tracking-wide px-2.5 py-1 rounded-full",
                                   isNurseNote
                                     ? "bg-teal-50 text-teal-700"
-                                    : "bg-blue-50 text-blue-700"
+                                    : "bg-blue-50 text-blue-700",
                                 )}
                               >
-                                {note.isSoap ? "SOAP" : "Observation"} · {note.role}
+                                {note.isSoap ? "SOAP" : "Observation"} ·{" "}
+                                {note.role}
                               </span>
                             </div>
-                            <span className="text-xs font-medium text-gray-400 flex items-center gap-1.5">
-                              <Clock className="w-3.5 h-3.5" />
-                              {format(new Date(note.createdAt), "MMM d, h:mm a")}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-medium text-gray-400 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" />
+                                {format(
+                                  new Date(note.createdAt),
+                                  "MMM d, h:mm a",
+                                )}
+                              </span>
+                              {isDoctor && note.isSoap && (
+                                <DeleteNoteButton
+                                  patientId={Number(id)}
+                                  noteId={note.id}
+                                />
+                              )}
+                            </div>
                           </div>
 
                           {note.isSoap ? (
                             <div className="space-y-3 text-sm leading-relaxed">
                               {note.soapSubjective && (
                                 <div className="bg-blue-50/60 p-3 rounded-lg">
-                                  <span className="font-bold text-blue-900 block mb-1 text-xs uppercase tracking-wide">Subjective</span>
-                                  <span className="text-gray-700">{note.soapSubjective}</span>
+                                  <span className="font-bold text-blue-900 block mb-1 text-xs uppercase tracking-wide">
+                                    Subjective
+                                  </span>
+                                  <span className="text-gray-700">
+                                    {note.soapSubjective}
+                                  </span>
                                 </div>
                               )}
                               {note.soapObjective && (
                                 <div className="bg-gray-50 p-3 rounded-lg">
-                                  <span className="font-bold text-gray-900 block mb-1 text-xs uppercase tracking-wide">Objective</span>
-                                  <span className="text-gray-700">{note.soapObjective}</span>
+                                  <span className="font-bold text-gray-900 block mb-1 text-xs uppercase tracking-wide">
+                                    Objective
+                                  </span>
+                                  <span className="text-gray-700">
+                                    {note.soapObjective}
+                                  </span>
                                 </div>
                               )}
                               {note.soapAssessment && (
                                 <div className="bg-amber-50/60 p-3 rounded-lg">
-                                  <span className="font-bold text-amber-900 block mb-1 text-xs uppercase tracking-wide">Assessment</span>
-                                  <span className="text-gray-700">{note.soapAssessment}</span>
+                                  <span className="font-bold text-amber-900 block mb-1 text-xs uppercase tracking-wide">
+                                    Assessment
+                                  </span>
+                                  <span className="text-gray-700">
+                                    {note.soapAssessment}
+                                  </span>
                                 </div>
                               )}
                               {note.soapPlan && (
                                 <div className="bg-green-50/60 p-3 rounded-lg">
-                                  <span className="font-bold text-green-900 block mb-1 text-xs uppercase tracking-wide">Plan</span>
-                                  <span className="text-gray-700">{note.soapPlan}</span>
+                                  <span className="font-bold text-green-900 block mb-1 text-xs uppercase tracking-wide">
+                                    Plan
+                                  </span>
+                                  <span className="text-gray-700">
+                                    {note.soapPlan}
+                                  </span>
                                 </div>
                               )}
                             </div>
                           ) : (
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{note.rawText}</p>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                              {note.rawText}
+                            </p>
                           )}
                         </CardContent>
                       </Card>
@@ -426,7 +628,7 @@ export default function PatientDetail() {
                 "shadow-md border-l-4 overflow-hidden",
                 patient.risk === "red"
                   ? "border-l-red-500 bg-red-50/40"
-                  : "border-l-amber-500 bg-amber-50/40"
+                  : "border-l-amber-500 bg-amber-50/40",
               )}
             >
               <CardContent className="p-5">
@@ -435,7 +637,9 @@ export default function PatientDetail() {
                     <BrainCircuit
                       className={cn(
                         "w-5 h-5",
-                        patient.risk === "red" ? "text-red-600" : "text-amber-600"
+                        patient.risk === "red"
+                          ? "text-red-600"
+                          : "text-amber-600",
                       )}
                     />
                     Why Flagged?
@@ -482,7 +686,7 @@ export default function PatientDetail() {
                 "border-l-4",
                 patient.risk === "red"
                   ? "border-l-red-500 bg-red-50/30"
-                  : "border-l-amber-500 bg-amber-50/30"
+                  : "border-l-amber-500 bg-amber-50/30",
               )}
             >
               <CardContent className="p-5">
@@ -490,13 +694,19 @@ export default function PatientDetail() {
                   <AlertTriangle
                     className={cn(
                       "w-4 h-4",
-                      patient.risk === "red" ? "text-red-600" : "text-amber-600"
+                      patient.risk === "red"
+                        ? "text-red-600"
+                        : "text-amber-600",
                     )}
                   />
                   Alert Reason
                 </h3>
-                <p className="text-sm text-gray-700 leading-relaxed">{patient.riskReason}</p>
-                <p className="text-xs text-gray-400 mt-3">Notify the attending doctor if concerned.</p>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {patient.riskReason}
+                </p>
+                <p className="text-xs text-gray-400 mt-3">
+                  Notify the attending doctor if concerned.
+                </p>
               </CardContent>
             </Card>
           )}
@@ -504,14 +714,18 @@ export default function PatientDetail() {
           {/* Current vitals snapshot */}
           <Card className="shadow-sm bg-white border-gray-100">
             <CardContent className="p-5">
-              <h3 className="font-bold text-lg mb-5 text-gray-900">Current Vitals</h3>
+              <h3 className="font-bold text-lg mb-5 text-gray-900">
+                Current Vitals
+              </h3>
               <div className="space-y-4">
                 {[
                   {
                     label: "Heart Rate",
                     value: `${patient.latestVitals.heartRate}`,
                     unit: "bpm",
-                    warn: patient.latestVitals.heartRate > 100 || patient.latestVitals.heartRate < 60,
+                    warn:
+                      patient.latestVitals.heartRate > 100 ||
+                      patient.latestVitals.heartRate < 60,
                   },
                   {
                     label: "SpO2",
@@ -538,11 +752,23 @@ export default function PatientDetail() {
                     warn: Number(patient.latestVitals.temperature) > 38.5,
                   },
                 ].map(({ label, value, unit, warn }) => (
-                  <div key={label} className="flex justify-between items-center border-b border-gray-50 pb-3 last:border-0 last:pb-0">
-                    <span className="text-gray-500 text-sm font-medium">{label}</span>
-                    <span className={cn("font-bold text-lg", warn ? "text-red-600" : "text-gray-900")}>
+                  <div
+                    key={label}
+                    className="flex justify-between items-center border-b border-gray-50 pb-3 last:border-0 last:pb-0"
+                  >
+                    <span className="text-gray-500 text-sm font-medium">
+                      {label}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-bold text-lg",
+                        warn ? "text-red-600" : "text-gray-900",
+                      )}
+                    >
                       {value}{" "}
-                      <span className="text-xs font-normal text-gray-400 ml-0.5">{unit}</span>
+                      <span className="text-xs font-normal text-gray-400 ml-0.5">
+                        {unit}
+                      </span>
                     </span>
                   </div>
                 ))}
@@ -551,7 +777,8 @@ export default function PatientDetail() {
               {/* Nurse: last recorded time */}
               {!isDoctor && (
                 <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-50 text-right">
-                  Last recorded: {format(new Date(patient.latestVitals.recordedAt), "h:mm a")}
+                  Last recorded:{" "}
+                  {format(new Date(patient.latestVitals.recordedAt), "h:mm a")}
                 </p>
               )}
             </CardContent>
@@ -560,7 +787,8 @@ export default function PatientDetail() {
           {/* Doctor: note about nurse access */}
           {isDoctor && (
             <div className="text-xs text-gray-400 leading-relaxed px-1">
-              All notes and vitals are visible to all ward staff. Nurse observations appear in the notes feed below.
+              All notes and vitals are visible to all ward staff. Nurse
+              observations appear in the notes feed below.
             </div>
           )}
         </div>
