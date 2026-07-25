@@ -1,4 +1,4 @@
-# Ward Copilot
+# Clinic Copilot
 
 AI clinical documentation and early-warning dashboard for hospital staff at Tier 2/3 Indian hospitals.
 
