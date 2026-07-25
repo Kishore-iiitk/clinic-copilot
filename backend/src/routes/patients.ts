@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db, patientsTable, vitalsTable, notesTable } from "../db";
 import {
+  CreatePatientBody,
   GetPatientParams,
   GetPatientVitalsParams,
   AddVitalsParams,
@@ -9,6 +10,7 @@ import {
   GetPatientNotesParams,
   CreatePatientNoteParams,
   CreatePatientNoteBody,
+  DeletePatientNoteParams,
 } from "../validators";
 import { computeRisk } from "../lib/risk";
 
@@ -62,9 +64,47 @@ async function getPatientSummary(patientId: number) {
 
 // GET /patients
 router.get("/patients", async (req, res): Promise<void> => {
-  const patients = await db.select().from(patientsTable).orderBy(asc(patientsTable.id));
-  const summaries = await Promise.all(patients.map((p) => getPatientSummary(p.id)));
+  const patients = await db
+    .select()
+    .from(patientsTable)
+    .orderBy(asc(patientsTable.id));
+  const summaries = await Promise.all(
+    patients.map((p) => getPatientSummary(p.id)),
+  );
   res.json(summaries.filter(Boolean));
+});
+
+// POST /patients (Nurse: add a new patient + initial vitals reading)
+router.post("/patients", async (req, res): Promise<void> => {
+  const body = CreatePatientBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+
+  const [insertedPatient] = await db
+    .insert(patientsTable)
+    .values({
+      name: body.data.name,
+      bedNumber: body.data.bedNumber,
+      age: body.data.age,
+      ward: body.data.ward,
+      diagnosis: body.data.diagnosis,
+    })
+    .returning();
+
+  await db.insert(vitalsTable).values({
+    patientId: insertedPatient.id,
+    heartRate: body.data.heartRate,
+    spo2: body.data.spo2,
+    bpSystolic: body.data.bpSystolic,
+    bpDiastolic: body.data.bpDiastolic,
+    temperature: String(body.data.temperature),
+    respiratoryRate: body.data.respiratoryRate,
+  });
+
+  const summary = await getPatientSummary(insertedPatient.id);
+  res.status(201).json(summary);
 });
 
 // GET /patients/:id
@@ -128,7 +168,9 @@ router.get("/patients/:id", async (req, res): Promise<void> => {
 
 // GET /patients/:id/vitals
 router.get("/patients/:id/vitals", async (req, res): Promise<void> => {
-  const params = GetPatientVitalsParams.safeParse({ id: Number(req.params.id) });
+  const params = GetPatientVitalsParams.safeParse({
+    id: Number(req.params.id),
+  });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
@@ -151,7 +193,7 @@ router.get("/patients/:id/vitals", async (req, res): Promise<void> => {
       bpDiastolic: v.bpDiastolic,
       temperature: Number(v.temperature),
       respiratoryRate: v.respiratoryRate,
-    }))
+    })),
   );
 });
 
@@ -221,13 +263,15 @@ router.get("/patients/:id/notes", async (req, res): Promise<void> => {
       soapObjective: n.soapObjective ?? null,
       soapAssessment: n.soapAssessment ?? null,
       soapPlan: n.soapPlan ?? null,
-    }))
+    })),
   );
 });
 
 // POST /patients/:id/notes
 router.post("/patients/:id/notes", async (req, res): Promise<void> => {
-  const params = CreatePatientNoteParams.safeParse({ id: Number(req.params.id) });
+  const params = CreatePatientNoteParams.safeParse({
+    id: Number(req.params.id),
+  });
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
@@ -267,12 +311,51 @@ router.post("/patients/:id/notes", async (req, res): Promise<void> => {
   });
 });
 
+// DELETE /patients/:id/notes/:noteId
+// Deletes the note from the database, so it disappears from both the
+// Doctor and Nurse views since they read from the same shared notes list.
+router.delete(
+  "/patients/:id/notes/:noteId",
+  async (req, res): Promise<void> => {
+    const params = DeletePatientNoteParams.safeParse({
+      id: Number(req.params.id),
+      noteId: Number(req.params.noteId),
+    });
+    if (!params.success) {
+      res.status(400).json({ error: params.error.message });
+      return;
+    }
+
+    const deleted = await db
+      .delete(notesTable)
+      .where(
+        and(
+          eq(notesTable.id, params.data.noteId),
+          eq(notesTable.patientId, params.data.id),
+        ),
+      )
+      .returning();
+
+    if (!deleted[0]) {
+      res.status(404).json({ error: "Note not found" });
+      return;
+    }
+
+    res.status(200).json({ success: true, id: deleted[0].id });
+  },
+);
+
 // GET /alerts
 router.get("/alerts", async (req, res): Promise<void> => {
-  const patients = await db.select().from(patientsTable).orderBy(asc(patientsTable.id));
-  const summaries = await Promise.all(patients.map((p) => getPatientSummary(p.id)));
+  const patients = await db
+    .select()
+    .from(patientsTable)
+    .orderBy(asc(patientsTable.id));
+  const summaries = await Promise.all(
+    patients.map((p) => getPatientSummary(p.id)),
+  );
   const alerts = summaries.filter(
-    (s) => s && (s.risk === "amber" || s.risk === "red")
+    (s) => s && (s.risk === "amber" || s.risk === "red"),
   );
   // Sort: red first, then amber
   alerts.sort((a, b) => {
