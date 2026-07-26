@@ -1,6 +1,24 @@
-# Clinic Copilot
+#  Clinic Copilot
 
-AI clinical documentation and early-warning dashboard for hospital staff at Tier 2/3 Indian hospitals.
+**The AI safety net for the busiest wards.**
+
+Clinic Copilot watches every patient's vitals against *their own* baseline, flags who's trending toward trouble before it becomes an emergency, and turns a nurse's voice into a doctor-ready SOAP note — in English or Tamil. Built for the reality of Tier 2/3 Indian hospitals: high patient loads, thin staffing, and paper charts that can't keep up.
+
+No more digging through a stack of vitals sheets to notice a slow decline. If a patient is worsening, Clinic Copilot already knows — and already explained why.
+
+---
+
+##  Features
+
+| | |
+|---|---|
+| 🟢🟠🔴 **Risk Badges** | Green / Amber / Red, computed from rolling deltas vs each patient's own baseline — not a one-size-fits-all threshold |
+| 🩺 **Doctor View** | Voice dictation → AI-structured SOAP notes, an AI "Why Flagged?" explanation for every alert, and one-tap Tamil translation |
+| 💉 **Nurse View** | Inline vitals entry form, quick observation notes, alert reasons surfaced inline — built for speed at the bedside |
+| ⏩ **Simulate Shift** | One click advances vitals for the whole ward — two patients deteriorate over time, so you can watch the early-warning system work end-to-end |
+| 🚨 **Live Alerts Feed** | Every Amber/Red patient across the ward, auto-sorted by severity, in one glanceable screen |
+
+---
 
 ## Repository Structure
 
@@ -10,13 +28,7 @@ ward-copilot/
 └── backend/     # Express + Drizzle + PostgreSQL — deploy to Render
 ```
 
-## Features
-
-- **Risk badges** (Green / Amber / Red) computed from rolling deltas vs each patient's baseline
-- **Doctor view** — Voice dictation → AI-structured SOAP notes, AI "Why Flagged?" explanation, Tamil translation
-- **Nurse view** — Inline vitals entry form, quick observation notes, alert reasons
-- **Simulate Shift** — advances vitals for all patients, two patients deteriorate over time as a demo
-- **Live Alerts feed** — shows all Amber/Red patients sorted by severity
+---
 
 ## Quick Start (Local)
 
@@ -34,7 +46,9 @@ cp .env.example .env   # set VITE_API_URL=http://localhost:3001
 npm run dev            # runs on http://localhost:5173
 ```
 
-## Deployment
+---
+
+## ☁️ Deployment
 
 ### Backend → Render
 
@@ -57,6 +71,8 @@ npm run dev            # runs on http://localhost:5173
 5. Add environment variable:
    - `VITE_API_URL` — your Render backend URL (e.g. `https://ward-copilot-api.onrender.com`)
 
+---
+
 ## Tech Stack
 
 | Layer | Tech |
@@ -65,3 +81,11 @@ npm run dev            # runs on http://localhost:5173
 | Backend | Node.js, Express 5, Drizzle ORM, PostgreSQL |
 | AI | Groq (`llama-3.3-70b-versatile` for reasoning, `llama-3.1-8b-instant` for translation) |
 | Deployment | Vercel (frontend) · Render (backend + Postgres) |
+
+---
+
+## 🔗 Live Demo
+
+**[clinic-copilot-five.vercel.app](https://clinic-copilot-five.vercel.app)**
+
+Built in 24 hours. Try **Simulate Shift** on the ward view to watch a patient deteriorate live.
